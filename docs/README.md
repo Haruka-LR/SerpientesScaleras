@@ -75,7 +75,7 @@ Todos los diagramas están en formato **Mermaid**. Puedes:
 
 ## ✨ Características
 
-- ✅ Juego interactivo de Serpientes y Escaleras
+- ✅ Juego interactivo de DE LA OCA
 - ✅ Desafíos matemáticos y geométricos
 - ✅ Efectos visuales con confeti
 - ✅ Soporte para múltiples equipos
