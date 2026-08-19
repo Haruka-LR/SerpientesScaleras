@@ -1,0 +1,19 @@
+graph TD
+    Astro["Astro 6.4.8<br/>Framework Principal"]
+    TS["TypeScript<br/>Tipado Estático"]
+    Confetti["canvas-confetti 1.9.4<br/>Efectos Visuales"]
+    
+    Astro --> Components["Componentes .astro"]
+    TS --> Utils["Utilidades TS"]
+    Confetti --> UI["Interfaz Usuario"]
+    
+    Components --> Pages["Páginas"]
+    Components --> Widgets["Componentes Reutilizables"]
+    
+    Utils --> TurnLogic["Lógica de Turnos"]
+    Utils --> MathLogic["Generación de Problemas"]
+    
+    Pages --> UI
+    Widgets --> UI
+    TurnLogic --> UI
+    MathLogic --> UI
