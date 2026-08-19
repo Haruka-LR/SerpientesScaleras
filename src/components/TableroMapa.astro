@@ -1,202 +1,372 @@
 ---
-// src/components/TableroMapa.astro
+import '../styles/board.css';
 ---
 
 <div class="mapa-container">
   <div class="mapa-info">
-    <span id="info-turno">🗺️ Camino al Éxito</span>
+    <span>🗺️</span> Camino al Éxito
   </div>
-  
+
   <div id="camino-tablero" class="camino-tablero"></div>
+
+  <div class="leaderboard-section">
+    <h3 class="leaderboard-title">📊 Posiciones y Sincronización Física</h3>
+    <div id="leaderboard-list" class="leaderboard-list"></div>
+  </div>
 </div>
 
-<style>
-  .mapa-container {
-    background: rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(10px);
-    border: 2px solid rgba(255, 255, 255, 0.15);
-    padding: 20px;
-    border-radius: 24px;
-    margin: 1.5rem 0;
-    width: 90%;
-    max-width: 850px;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  }
+<div id="victoria-modal" class="victoria-overlay hidden">
+  <div class="victoria-card">
+    <div class="victoria-badge">🏆 ¡VICTORIA! 🏆</div>
+    <div class="victoria-avatar" id="ganador-avatar">🏆</div>
+    <h2 class="victoria-team-name" id="ganador-name">Equipo Ganador</h2>
+    <p class="victoria-congrats">
+      ¡Han demostrado ser unos increíbles matemáticos y han llegado a la meta final!
+    </p>
 
-  .mapa-info {
-    text-align: center;
-    font-size: 1.3rem;
-    font-weight: bold;
-    color: #ffffff;
-    margin-bottom: 1.2rem;
-    text-shadow: 0 2px 8px rgba(255, 255, 255, 0.3);
-  }
+    <div class="victoria-stats-section">
+      <h3>📊 Resumen de la Partida</h3>
+      <table class="stats-table">
+        <thead>
+          <tr>
+            <th>Equipo</th>
+            <th>Casilla Final</th>
+            <th>Aciertos ✅</th>
+            <th>Errores ❌</th>
+          </tr>
+        </thead>
+        <tbody id="victoria-stats-tbody"></tbody>
+      </table>
+    </div>
 
-  .camino-tablero {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    justify-content: center;
-    max-height: 220px;
-    overflow-y: auto;
-    padding: 10px;
-    background: rgba(0, 0, 0, 0.4);
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-  }
-
-  /* Scrollbar personalizado para que no se vea el feo del sistema */
-  .camino-tablero::-webkit-scrollbar {
-    width: 6px;
-  }
-  .camino-tablero::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
-  }
-
-  /* Estilo base de cada casilla */
-  :global(.casilla-nodo) {
-    width: 45px;
-    height: 45px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 2px solid #c084fc;
-    color: #ffffff;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 1rem;
-    transition: all 0.3s ease;
-    position: relative;
-    box-shadow: 0 0 10px rgba(192, 132, 252, 0.2);
-  }
-
-  /* Casilla Meta */
-  :global(.casilla-nodo.meta) {
-    background: linear-gradient(135deg, #10b981, #059669);
-    border-color: #34d399;
-    color: white;
-    border-radius: 12px;
-    width: auto;
-    padding: 0 15px;
-    box-shadow: 0 0 15px rgba(16, 185, 129, 0.5);
-  }
-
-  /* Jugadores dentro de la casilla */
-  :global(.ficha-jugador) {
-    position: absolute;
-    bottom: -4px;
-    right: -4px;
-    font-size: 1.6rem;
-    z-index: 10;
-    animation: brincar 0.5s infinite alternate;
-  }
-
-  @keyframes brincar {
-    from { transform: translateY(0); }
-    to { transform: translateY(-5px); }
-  }
-</style>
+    <button id="btn-jugar-nuevo" class="btn-play-again">Jugar de Nuevo 🎮</button>
+  </div>
+</div>
 
 <script>
-  let totalCasillas = 100; 
-  let posicionesEquipos: Record<string, number> = {}; 
+  import confetti from "canvas-confetti";
+  import { audioController } from "../utils/audioController";
+
+  let totalCasillas = 100;
+  let posicionesEquipos: Record<string, number> = {};
 
   function inicializarTablero() {
-    const saved = localStorage.getItem('serpientes_escaleras_setup');
-    const contenedor = document.getElementById('camino-tablero');
+    const saved = localStorage.getItem("serpientes_escaleras_setup");
+    const contenedor = document.getElementById("camino-tablero");
     if (!contenedor) return;
+
+    const savedPosiciones = localStorage.getItem("serpientes_escaleras_posiciones");
+    if (savedPosiciones) {
+      try {
+        posicionesEquipos = JSON.parse(savedPosiciones);
+      } catch (e) {
+        console.error("Error al cargar posiciones persistidas:", e);
+      }
+    }
 
     if (saved) {
       const parsed = JSON.parse(saved);
       if (parsed.boardTiles) totalCasillas = parsed.boardTiles;
-      
+
       if (parsed.teams && Array.isArray(parsed.teams)) {
         parsed.teams.forEach((team: any) => {
-          // Mantener la posición si ya existía en la partida actual o iniciar en 1
-          if (!posicionesEquipos[team.name]) {
-            posicionesEquipos[team.name] = 1;
+          if (posicionesEquipos[team.name] === undefined) {
+            posicionesEquipos[team.name] = 0;
           }
         });
       }
     }
 
-    contenedor.innerHTML = '';
-    for (let i = 1; i <= totalCasillas; i++) {
-      const nodo = document.createElement('div');
-      nodo.className = `casilla-nodo ${i === totalCasillas ? 'meta' : ''}`;
+    contenedor.innerHTML = "";
+    for (let i = 0; i <= totalCasillas; i++) {
+      const nodo = document.createElement("div");
+      const isInicio = i === 0;
+      const isMeta = i === totalCasillas;
+
+      let extraClass = "";
+      if (isMeta) extraClass = "meta";
+      else if (isInicio) extraClass = "inicio";
+
+      nodo.className = `casilla-nodo ${extraClass}`;
       nodo.id = `casilla-${i}`;
-      nodo.innerText = i === totalCasillas ? `🏁 Meta (${i})` : i.toString();
+      
+      if (isInicio) {
+        nodo.innerText = "🚀 Inicio";
+      } else if (isMeta) {
+        nodo.innerText = `🏁 Meta (${i})`;
+      } else {
+        nodo.innerText = i.toString();
+      }
       contenedor.appendChild(nodo);
     }
 
+    localStorage.setItem("serpientes_escaleras_posiciones", JSON.stringify(posicionesEquipos));
+
     actualizarFichasVisuales();
+    actualizarTablaPosiciones();
   }
 
   function actualizarFichasVisuales() {
-    document.querySelectorAll('.ficha-jugador').forEach(f => f.remove());
+    document.querySelectorAll(".ficha-jugador").forEach((f) => f.remove());
+    document.querySelectorAll(".contenedor-fichas-casilla").forEach((c) => c.remove());
+    document.querySelectorAll(".casilla-nodo").forEach((c) => c.classList.remove("ocupada"));
 
     Object.entries(posicionesEquipos).forEach(([equipoName, casillaActual]) => {
       const casillaNodo = document.getElementById(`casilla-${casillaActual}`);
-      
+
       if (casillaNodo) {
-        const saved = localStorage.getItem('serpientes_escaleras_setup');
-        let avatar = '🦁'; 
+        casillaNodo.classList.add("ocupada");
+
+        let contenedorFichas = casillaNodo.querySelector(".contenedor-fichas-casilla");
+        if (!contenedorFichas) {
+          contenedorFichas = document.createElement("div");
+          contenedorFichas.className = "contenedor-fichas-casilla";
+          casillaNodo.appendChild(contenedorFichas);
+        }
+
+        const saved = localStorage.getItem("serpientes_escaleras_setup");
+        let avatar = "🦁";
         if (saved) {
           const parsed = JSON.parse(saved);
           const t = parsed.teams.find((team: any) => team.name === equipoName);
           if (t) avatar = t.avatar;
         }
 
-        const ficha = document.createElement('span');
-        ficha.className = 'ficha-jugador';
+        const ficha = document.createElement("span");
+        ficha.className = "ficha-jugador";
         ficha.innerText = avatar;
+        ficha.title = equipoName;
 
-        const fichasEnCasilla = casillaNodo.querySelectorAll('.ficha-jugador').length;
-        if (fichasEnCasilla > 0) {
-          ficha.style.transform = `translateX(${fichasEnCasilla * 12}px) translateY(${fichasEnCasilla * -2}px)`;
-        }
-
-        casillaNodo.appendChild(ficha);
+        contenedorFichas.appendChild(ficha);
       }
     });
   }
 
-  // ESCUCHAR MOVIMIENTOS
-  document.addEventListener('renderizarMovimientoTablero', (e: any) => {
-    const { equipoName, pasos } = e.detail;
+  function actualizarTablaPosiciones() {
+    const listContenedor = document.getElementById("leaderboard-list");
+    if (!listContenedor) return;
 
-    if (!posicionesEquipos[equipoName]) {
-      posicionesEquipos[equipoName] = 1;
+    const saved = localStorage.getItem("serpientes_escaleras_setup");
+    if (!saved) return;
+
+    try {
+      const parsed = JSON.parse(saved);
+      if (!parsed.teams || !Array.isArray(parsed.teams)) return;
+
+      const equiposOrdenados = [...parsed.teams].sort((a: any, b: any) => {
+        const posA = posicionesEquipos[a.name] !== undefined ? posicionesEquipos[a.name] : 0;
+        const posB = posicionesEquipos[b.name] !== undefined ? posicionesEquipos[b.name] : 0;
+        return posB - posA;
+      });
+
+      listContenedor.innerHTML = "";
+
+      const rankEmojis = ['🥇', '🥈', '🥉', '🎖️'];
+
+      equiposOrdenados.forEach((team: any, index: number) => {
+        const currentPos = posicionesEquipos[team.name] !== undefined ? posicionesEquipos[team.name] : 0;
+        const posTexto = currentPos === 0 ? "Inicio" : `Casilla ${currentPos} / ${totalCasillas}`;
+        const rankBadge = rankEmojis[index] || `${index + 1}º`;
+
+        const item = document.createElement("div");
+        item.className = "leaderboard-item";
+        item.style.borderLeft = `5px solid ${team.hexColor}`;
+
+        item.innerHTML = `
+          <div class="leaderboard-team-info">
+            <span class="badge-casilla" style="font-size: 1.1rem;">${rankBadge}</span>
+            <span class="leaderboard-avatar">${team.avatar}</span>
+            <span class="leaderboard-team-name" style="color: ${team.hexColor}">${team.name}</span>
+          </div>
+          <div class="leaderboard-stats">
+            <span class="badge-casilla">${posTexto}</span>
+            <button class="btn-adj btn-menos" data-team="${team.name}">-</button>
+            <button class="btn-adj btn-mas" data-team="${team.name}">+</button>
+          </div>
+        `;
+        listContenedor.appendChild(item);
+      });
+
+      listContenedor.querySelectorAll(".btn-menos").forEach((btn) => {
+        btn.addEventListener("click", (e: any) => {
+          const teamName = e.target.getAttribute("data-team");
+          ajustarPosicionManual(teamName, -1);
+        });
+      });
+
+      listContenedor.querySelectorAll(".btn-mas").forEach((btn) => {
+        btn.addEventListener("click", (e: any) => {
+          const teamName = e.target.getAttribute("data-team");
+          ajustarPosicionManual(teamName, 1);
+        });
+      });
+    } catch (e) {
+      console.error("Error al actualizar la tabla de posiciones:", e);
     }
+  }
 
-    let nuevaPosicion = posicionesEquipos[equipoName] + pasos;
+  function ajustarPosicionManual(equipoName: string, cambio: number) {
+    const posActual = posicionesEquipos[equipoName] !== undefined ? posicionesEquipos[equipoName] : 0;
+    let nuevaPosicion = posActual + cambio;
 
-    if (nuevaPosicion >= totalCasillas) {
-      nuevaPosicion = totalCasillas;
-      const info = document.getElementById('info-turno');
-      if (info) info.innerHTML = `🎉 ¡El <strong>${equipoName}</strong> ha ganado el juego! 🏆`;
-    }
-
-    document.dispatchEvent(new CustomEvent('juegoConcluido', { detail: { ganador: equipoName } }));
-    
+    if (nuevaPosicion < 0) nuevaPosicion = 0;
+    if (nuevaPosicion > totalCasillas) nuevaPosicion = totalCasillas;
 
     posicionesEquipos[equipoName] = nuevaPosicion;
+    localStorage.setItem("serpientes_escaleras_posiciones", JSON.stringify(posicionesEquipos));
+
     actualizarFichasVisuales();
+    actualizarTablaPosiciones();
 
     const nodoDestino = document.getElementById(`casilla-${nuevaPosicion}`);
     if (nodoDestino) {
-      nodoDestino.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      nodoDestino.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    if (nuevaPosicion === totalCasillas) {
+      document.dispatchEvent(new CustomEvent("juegoConcluido", { detail: { ganador: equipoName } }));
+    }
+  }
+
+  function mostrarVictoria(ganadorName: string) {
+    const modal = document.getElementById("victoria-modal");
+    const avatarEl = document.getElementById("ganador-avatar");
+    const nameEl = document.getElementById("ganador-name");
+    const tbody = document.getElementById("victoria-stats-tbody");
+    if (!modal || !avatarEl || !nameEl || !tbody) return;
+
+    const saved = localStorage.getItem("serpientes_escaleras_setup");
+    if (!saved) return;
+
+    try {
+      const parsed = JSON.parse(saved);
+      const equipos = parsed.teams || [];
+
+      const ganador = equipos.find((t: any) => t.name === ganadorName);
+      avatarEl.textContent = ganador ? ganador.avatar : "🏆";
+      nameEl.textContent = ganadorName;
+      if (ganador) {
+        nameEl.style.color = ganador.hexColor;
+      }
+
+      audioController.play("victoria");
+
+      const duration = 7 * 1000;
+      const end = Date.now() + duration;
+
+      (function frame() {
+        confetti({ particleCount: 6, angle: 60, spread: 60, origin: { x: 0, y: 0.7 } });
+        confetti({ particleCount: 6, angle: 120, spread: 60, origin: { x: 1, y: 0.7 } });
+
+        if (Date.now() < end) {
+          requestAnimationFrame(frame);
+        }
+      })();
+
+      tbody.innerHTML = "";
+      equipos.forEach((t: any) => {
+        const finalPos = posicionesEquipos[t.name] !== undefined ? posicionesEquipos[t.name] : 0;
+        const correct = t.correctAnswers || 0;
+        const incorrect = t.incorrectAnswers || 0;
+        const posTexto = finalPos === 0 ? "Inicio" : `Casilla ${finalPos}`;
+
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>
+            <div class="leaderboard-team-info">
+              <span>${t.avatar}</span>
+              <span style="color: ${t.hexColor}">${t.name}</span>
+            </div>
+          </td>
+          <td>${posTexto}</td>
+          <td style="color: #22c55e; font-weight: bold;">${correct}</td>
+          <td style="color: #ef4444; font-weight: bold;">${incorrect}</td>
+        `;
+        tbody.appendChild(row);
+      });
+
+      modal.classList.remove("hidden");
+    } catch (e) {
+      console.error("Error al mostrar pantalla de victoria:", e);
+    }
+  }
+
+  document.addEventListener("renderizarMovimientoTablero", (e: any) => {
+    const { equipoName, pasos } = e.detail;
+
+    if (posicionesEquipos[equipoName] === undefined) {
+      posicionesEquipos[equipoName] = 0;
+    }
+
+    let nuevaPosicion = posicionesEquipos[equipoName] + pasos;
+    let llegoAMeta = false;
+
+    if (nuevaPosicion >= totalCasillas) {
+      nuevaPosicion = totalCasillas;
+      llegoAMeta = true;
+      const info = document.getElementById("info-turno");
+      if (info) info.innerHTML = `🎉 ¡El <strong>${equipoName}</strong> ha ganado el juego! 🏆`;
+    } else if (nuevaPosicion < 0) {
+      nuevaPosicion = 0;
+    }
+
+    posicionesEquipos[equipoName] = nuevaPosicion;
+    localStorage.setItem("serpientes_escaleras_posiciones", JSON.stringify(posicionesEquipos));
+
+    actualizarFichasVisuales();
+    actualizarTablaPosiciones();
+
+    if (llegoAMeta) {
+      document.dispatchEvent(new CustomEvent("juegoConcluido", { detail: { ganador: equipoName } }));
+    }
+
+    const nodoDestino = document.getElementById(`casilla-${nuevaPosicion}`);
+    if (nodoDestino) {
+      nodoDestino.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
   });
 
-  // Forzar inicialización en cualquier ciclo de vida de Astro
-  inicializarTablero();
-  document.addEventListener('DOMContentLoaded', inicializarTablero);
-  document.addEventListener('astro:page-load', inicializarTablero);
+  document.addEventListener("juegoConcluido", (e: any) => {
+    mostrarVictoria(e.detail.ganador);
+  });
 
-  document.addEventListener('setupActualizado', () => {
+  document.addEventListener("DOMContentLoaded", () => {
+    const btnJugarNuevo = document.getElementById("btn-jugar-nuevo");
+    if (btnJugarNuevo) {
+      btnJugarNuevo.addEventListener("click", () => {
+        posicionesEquipos = {};
+        localStorage.removeItem("serpientes_escaleras_posiciones");
+
+        const saved = localStorage.getItem("serpientes_escaleras_setup");
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (parsed.teams && Array.isArray(parsed.teams)) {
+              parsed.teams = parsed.teams.map((t: any) => ({
+                ...t,
+                correctAnswers: 0,
+                incorrectAnswers: 0,
+              }));
+              localStorage.setItem("serpientes_escaleras_setup", JSON.stringify(parsed));
+            }
+          } catch (e) {
+            console.error("Error al limpiar estadísticas:", e);
+          }
+        }
+
+        const modal = document.getElementById("victoria-modal");
+        if (modal) modal.classList.add("hidden");
+
+        window.location.href = "/Setup";
+      });
+    }
+  });
+
+  inicializarTablero();
+  document.addEventListener("DOMContentLoaded", inicializarTablero);
+  document.addEventListener("astro:page-load", inicializarTablero);
+
+  document.addEventListener("setupActualizado", () => {
     posicionesEquipos = {};
     inicializarTablero();
   });
