@@ -1,0 +1,8 @@
+graph LR
+    A["localStorage<br/>serpientes_escaleras_setup"] -->|Carga| B["TurnManager<br/>constructor"]
+    B -->|inicializar| C["Equipos[]<br/>Jugadores"]
+    C -->|ronda| D["Estado Turno<br/>ESPERANDO/EN_CURSO/RESUELTO"]
+    D -->|siguiente| E["Próximo Equipo"]
+    E -->|Próximo Miembro| F["turnInfo"]
+    F -->|Retorna| G["Componentes UI<br/>ModalAlpha/Beta"]
+    G -->|Actualiza| C
